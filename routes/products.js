@@ -161,7 +161,7 @@ router.get('/:id', async (req, res) => {
  * POST /api/products/fetch-all - Fetch products for all categories
  * Requires admin role
  */
-router.post('/fetch-all', requireRole(['admin', 'superadmin']), async (req, res) => {
+router.post('/fetch-all', requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const {
       productsPerRange = 20,
@@ -169,7 +169,7 @@ router.post('/fetch-all', requireRole(['admin', 'superadmin']), async (req, res)
       maxConcurrent = 2
     } = req.body;
 
-    console.log(`🚀 Admin ${req.user.email} started bulk product fetching`);
+    console.log(`🚀 Admin ${req.admin.email} started bulk product fetching`);
 
     // Start the fetching process (don't await as it might take long)
     const fetchingPromise = productFetchingService.fetchAllProducts({
@@ -213,7 +213,7 @@ router.post('/fetch-all', requireRole(['admin', 'superadmin']), async (req, res)
  * POST /api/products/fetch-category/:categoryId - Fetch products for specific category
  * Requires admin role
  */
-router.post('/fetch-category/:categoryId', requireRole(['admin', 'superadmin']), async (req, res) => {
+router.post('/fetch-category/:categoryId', requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { categoryId } = req.params;
     const {
@@ -221,7 +221,7 @@ router.post('/fetch-category/:categoryId', requireRole(['admin', 'superadmin']),
       skipExisting = true
     } = req.body;
 
-    console.log(`🔍 Admin ${req.user.email} fetching products for category ${categoryId}`);
+    console.log(`🔍 Admin ${req.admin.email} fetching products for category ${categoryId}`);
 
     const result = await productFetchingService.fetchProductsForCategoryById(categoryId, {
       productsPerRange: parseInt(productsPerRange),
