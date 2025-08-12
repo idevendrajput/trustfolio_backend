@@ -1,4 +1,5 @@
 const Category = require('../models/Category');
+const { electronicsCategories } = require('../seed_electronics_categories');
 
 // @desc    Get all categories (for home page)
 // @route   GET /api/categories
@@ -27,7 +28,7 @@ const getAllCategories = async (req, res) => {
       .sort(sort)
       .limit(limit * 1)
       .skip(skip)
-      .select('name slug title description image sortOrder created_at updated_at')
+      .select('name title description image sortOrder searchKeywords isActive created_at updated_at')
       .exec();
     
     // Get total count for pagination
@@ -132,15 +133,8 @@ const getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Check if it's MongoDB ObjectId or slug
-    let category;
-    if (id.match(/^[0-9a-fA-F]{24}$/)) {
-      // It's a valid ObjectId
-      category = await Category.findById(id);
-    } else {
-      // It's a slug
-      category = await Category.findOne({ slug: id });
-    }
+    // Find by ID only
+    const category = await Category.findById(id);
     
     if (!category) {
       return res.status(404).json({
@@ -168,12 +162,10 @@ const getCategoryById = async (req, res) => {
 // @access  Private (Admin only)
 const createCategory = async (req, res) => {
   try {
-    const { name, title, description, image, isActive = true, sortOrder = 0 } = req.body;
+    const { name, title, description, image, isActive = true, sortOrder = 0, searchKeywords = [] } = req.body;
     
     // Check if category already exists
-    const existingCategory = await Category.findOne({ 
-      $or: [{ name }, { slug: name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') }]
-    });
+    const existingCategory = await Category.findOne({ name });
     
     if (existingCategory) {
       return res.status(400).json({
@@ -189,7 +181,8 @@ const createCategory = async (req, res) => {
       description,
       image,
       isActive,
-      sortOrder
+      sortOrder,
+      searchKeywords
     });
     
     res.status(201).json({
@@ -241,15 +234,6 @@ const updateCategory = async (req, res) => {
         success: false,
         message: 'Category not found'
       });
-    }
-    
-    // If name is being updated, regenerate slug
-    if (updateData.name && updateData.name !== category.name) {
-      updateData.slug = updateData.name
-        .toLowerCase()
-        .replace(/[^a-zA-Z0-9]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
     }
     
     // Update category
@@ -360,6 +344,41 @@ const toggleCategoryStatus = async (req, res) => {
   }
 };
 
+// @desc    Seed electronics categories
+// @route   POST /api/categories/seed-electronics
+// @access  Private (Super Admin only)
+const seedCategories = async (req, res) => {
+  try {
+    // Clear all existing categories
+    const deleteResult = await Category.deleteMany({});
+    console.log(`Cleared ${deleteResult.deletedCount} existing categories`);
+    
+    // Insert new electronics categories
+    const insertedCategories = await Category.insertMany(electronicsCategories);
+    
+    res.json({
+      success: true,
+      message: `Successfully seeded ${insertedCategories.length} electronics categories`,
+      data: {
+        cleared: deleteResult.deletedCount,
+        seeded: insertedCategories.length,
+        categories: insertedCategories.map(cat => ({
+          id: cat._id,
+          name: cat.name,
+          title: cat.title
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Seed Categories Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while seeding categories',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
 module.exports = {
   getAllCategories,
   getAllCategoriesAdmin,
@@ -367,5 +386,6 @@ module.exports = {
   createCategory,
   updateCategory,
   deleteCategory,
-  toggleCategoryStatus
+  toggleCategoryStatus,
+  seedCategories
 };
