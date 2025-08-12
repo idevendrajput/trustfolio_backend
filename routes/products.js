@@ -161,7 +161,7 @@ router.get('/:id', async (req, res) => {
  * POST /api/products/fetch-all - Fetch products for all categories
  * Requires admin role
  */
-router.post('/fetch-all', requireRole(['admin', 'super_admin']), async (req, res) => {
+router.post('/fetch-all', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const {
       productsPerRange = 20,
@@ -213,7 +213,7 @@ router.post('/fetch-all', requireRole(['admin', 'super_admin']), async (req, res
  * POST /api/products/fetch-category/:categoryId - Fetch products for specific category
  * Requires admin role
  */
-router.post('/fetch-category/:categoryId', requireRole(['admin', 'super_admin']), async (req, res) => {
+router.post('/fetch-category/:categoryId', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const { categoryId } = req.params;
     const {
