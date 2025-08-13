@@ -70,6 +70,7 @@ class OxylabsService {
     
     const payload = {
       source: 'amazon_search',
+      domain: 'amazon.in',
       query: searchTerms,
       parse: true,
       user_agent_type: 'desktop',
@@ -77,6 +78,10 @@ class OxylabsService {
         {
           key: 'results_language',
           value: 'en'
+        },
+        {
+          key: 'amazon_domain',
+          value: 'amazon.in'
         }
       ]
     };
@@ -248,25 +253,17 @@ class OxylabsService {
       current = product.price_lower;
     }
 
-    // Parse string prices (handle both USD and INR formats)
+    // Parse string prices (remove currency symbols and convert to number)
     if (typeof current === 'string') {
-      // Remove currency symbols and convert to number
-      current = parseFloat(current.replace(/[^0-9.]/g, ''));
+      // Remove currency symbols (₹, $, etc.) and convert to number
+      current = parseFloat(current.replace(/[^0-9.,]/g, '').replace(',', ''));
     }
     if (typeof original === 'string') {
-      original = parseFloat(original.replace(/[^0-9.]/g, ''));
+      original = parseFloat(original.replace(/[^0-9.,]/g, '').replace(',', ''));
     }
     
-    // Smart currency detection and conversion
-    // If price is likely in USD (< 1000), convert to approximate INR
-    if (current && current < 1000 && current > 0) {
-      console.log(`💱 Converting USD ${current} to INR`);
-      current = Math.round(current * 83); // Approximate USD to INR conversion
-    }
-    if (original && original < 1000 && original > 0) {
-      console.log(`💱 Converting original USD ${original} to INR`);
-      original = Math.round(original * 83);
-    }
+    // Since we're using Amazon India, prices should already be in INR
+    // No currency conversion needed
 
     const discount = {};
     if (current && original && original > current) {
