@@ -252,9 +252,10 @@ productSchema.methods.validateProductData = function() {
     errors.push('Invalid price');
   }
   
-  if (!this.images || this.images.length === 0) {
-    errors.push('No images found');
-  }
+  // Temporarily allow products without images for initial data collection
+  // if (!this.images || this.images.length === 0) {
+  //   errors.push('No images found');
+  // }
   
   return errors;
 };

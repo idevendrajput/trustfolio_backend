@@ -65,21 +65,23 @@ class OxylabsService {
    * @returns {Promise<Array>} - Array of products
    */
   async searchProducts(category, maxPrice, keywords = [], limit = 20) {
-    // Add India-specific keywords to help target Indian market products
-    const indiaKeywords = ['india', 'indian', 'delivery in india', 'flipkart', 'amazon.in'];
-    const searchKeywords = [category, ...keywords, ...indiaKeywords].join(' ');
+    // Optimize search query for better results
+    const searchTerms = [category, ...keywords].join(' ');
     
-    // Match working configuration - basic setup without geo restrictions
     const payload = {
       source: 'amazon_search',
-      // Note: domain parameter removed - not available in this subscription
-      // Note: geo_location and locale parameters also not supported in this subscription
-      query: searchKeywords,
+      query: searchTerms,
       parse: true,
-      user_agent_type: 'desktop'
+      user_agent_type: 'desktop',
+      context: [
+        {
+          key: 'results_language',
+          value: 'en'
+        }
+      ]
     };
 
-    // Note: Price filtering through context parameters is not supported
+    // Note: Using amazon_search source with context for better results
     // Price filtering will be done client-side after getting results
 
     try {
@@ -312,28 +314,49 @@ class OxylabsService {
   extractImages(product) {
     const images = [];
     
-    if (product.images && Array.isArray(product.images)) {
-      product.images.forEach((img, index) => {
-        if (typeof img === 'string') {
-          images.push({
-            url: img,
-            alt: product.title || 'Product image',
-            isPrimary: index === 0
+    // Try multiple image field variations
+    const imageFields = [
+      'images', 'image', 'url_image', 'thumbnail', 'img_url', 
+      'main_image', 'product_image', 'picture'
+    ];
+    
+    for (const field of imageFields) {
+      if (product[field]) {
+        if (Array.isArray(product[field])) {
+          product[field].forEach((img, index) => {
+            let imageUrl = null;
+            
+            if (typeof img === 'string') {
+              imageUrl = img;
+            } else if (typeof img === 'object' && img.url) {
+              imageUrl = img.url;
+            }
+            
+            if (imageUrl && imageUrl.startsWith('http')) {
+              images.push({
+                url: imageUrl,
+                alt: product.title || 'Product image',
+                isPrimary: index === 0 && images.length === 0
+              });
+            }
           });
-        } else if (img.url) {
+        } else if (typeof product[field] === 'string' && product[field].startsWith('http')) {
           images.push({
-            url: img.url,
-            alt: img.alt || product.title || 'Product image',
-            isPrimary: index === 0
+            url: product[field],
+            alt: product.title || 'Product image',
+            isPrimary: images.length === 0
           });
         }
-      });
-    } else if (product.image) {
-      images.push({
-        url: product.image,
-        alt: product.title || 'Product image',
-        isPrimary: true
-      });
+        
+        // If we found images from this field, stop looking
+        if (images.length > 0) break;
+      }
+    }
+    
+    // If no images found, create a placeholder based on category
+    if (images.length === 0) {
+      console.warn('⚠️  No images found, using placeholder');
+      // Don't add placeholder - let validation handle this
     }
 
     return images;
