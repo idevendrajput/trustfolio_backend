@@ -7,6 +7,9 @@ const {
   updateCategory,
   deleteCategory,
   toggleCategoryStatus,
+  getCategoryPriceRanges,
+  updateCategoryPriceRanges,
+  resetCategoryPriceRanges,
   seedCategories
 } = require('../controllers/categoryController');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -42,6 +45,11 @@ router.delete('/:id', authenticate, requireRole('admin', 'super_admin'), deleteC
 
 // Toggle category status (Admin only)
 router.patch('/:id/toggle-status', authenticate, requireRole('admin', 'super_admin'), toggleCategoryStatus);
+
+// Price Range Management Routes (Admin only)
+router.get('/:id/price-ranges', authenticate, requireRole('admin', 'super_admin'), getCategoryPriceRanges);
+router.put('/:id/price-ranges', authenticate, requireRole('admin', 'super_admin'), updateCategoryPriceRanges);
+router.post('/:id/price-ranges/reset', authenticate, requireRole('admin', 'super_admin'), resetCategoryPriceRanges);
 
 // Seed electronics categories (Super Admin only)
 router.post('/seed-electronics', authenticate, requireRole('super_admin'), seedCategories);

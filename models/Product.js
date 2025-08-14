@@ -147,6 +147,26 @@ const productSchema = new mongoose.Schema({
     estimatedDelivery: Date
   },
   
+  // Product Badges
+  badges: {
+    isPrime: {
+      type: Boolean,
+      default: false
+    },
+    isBestSeller: {
+      type: Boolean,
+      default: false
+    },
+    isAmazonChoice: {
+      type: Boolean,
+      default: false
+    },
+    isLimitedDeal: {
+      type: Boolean,
+      default: false
+    }
+  },
+  
   // Additional Product Information
   features: [String],
   dimensions: {
@@ -166,13 +186,13 @@ const productSchema = new mongoose.Schema({
     },
     source: {
       type: String,
-      default: 'oxylabs',
-      enum: ['oxylabs', 'manual', 'other']
+      default: 'scrapingdog',
+      enum: ['oxylabs', 'scrapingdog', 'manual', 'other']
     },
     searchQuery: String,
     priceRangeQueried: {
-      min: Number,
-      max: Number
+      type: mongoose.Schema.Types.Mixed, // Can be object or string
+      default: {}
     },
     position: Number // Position in search results
   },

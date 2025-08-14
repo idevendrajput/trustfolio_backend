@@ -344,6 +344,167 @@ const toggleCategoryStatus = async (req, res) => {
   }
 };
 
+// @desc    Get price ranges for a category
+// @route   GET /api/categories/:id/price-ranges
+// @access  Private (Admin only)
+const getCategoryPriceRanges = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const category = await Category.findById(id).select('name title priceRanges scrapingConfig');
+    
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        categoryId: category._id,
+        categoryName: category.name,
+        categoryTitle: category.title,
+        priceRanges: category.priceRanges || [],
+        scrapingConfig: category.scrapingConfig || {
+          maxProductsPerRange: 20,
+          maxPages: 2,
+          scrapingStatus: 'pending'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get Price Ranges Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching price ranges',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
+// @desc    Update price ranges for a category
+// @route   PUT /api/categories/:id/price-ranges
+// @access  Private (Admin only)
+const updateCategoryPriceRanges = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { priceRanges, scrapingConfig } = req.body;
+    
+    const category = await Category.findById(id);
+    
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
+      });
+    }
+    
+    // Validate price ranges format
+    if (priceRanges) {
+      for (const range of priceRanges) {
+        if (!range.name || !range.label || typeof range.min !== 'number' || typeof range.max !== 'number') {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid price range format. Each range must have name, label, min, and max.'
+          });
+        }
+      }
+    }
+    
+    // Update data
+    const updateData = {};
+    if (priceRanges) updateData.priceRanges = priceRanges;
+    if (scrapingConfig) updateData.scrapingConfig = { ...category.scrapingConfig, ...scrapingConfig };
+    
+    const updatedCategory = await Category.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('name title priceRanges scrapingConfig');
+    
+    res.json({
+      success: true,
+      message: 'Price ranges updated successfully',
+      data: {
+        categoryId: updatedCategory._id,
+        categoryName: updatedCategory.name,
+        categoryTitle: updatedCategory.title,
+        priceRanges: updatedCategory.priceRanges,
+        scrapingConfig: updatedCategory.scrapingConfig
+      }
+    });
+  } catch (error) {
+    console.error('Update Price Ranges Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating price ranges',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
+// @desc    Reset price ranges for a category to default
+// @route   POST /api/categories/:id/price-ranges/reset
+// @access  Private (Admin only)
+const resetCategoryPriceRanges = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const category = await Category.findById(id);
+    
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
+      });
+    }
+    
+    // Default price ranges for any category
+    const defaultPriceRanges = [
+      { name: 'under_5k', label: '₹0 - ₹5,000', min: 0, max: 5000, query: 'under 5000' },
+      { name: 'under_10k', label: '₹5,000 - ₹10,000', min: 5000, max: 10000, query: 'under 10000' },
+      { name: 'under_20k', label: '₹10,000 - ₹20,000', min: 10000, max: 20000, query: 'under 20000' },
+      { name: 'under_30k', label: '₹20,000 - ₹30,000', min: 20000, max: 30000, query: 'under 30000' },
+      { name: 'under_50k', label: '₹30,000 - ₹50,000', min: 30000, max: 50000, query: 'under 50000' },
+      { name: 'above_50k', label: '₹50,000+', min: 50000, max: 100000, query: 'above 50000' }
+    ];
+    
+    const updatedCategory = await Category.findByIdAndUpdate(
+      id,
+      { 
+        priceRanges: defaultPriceRanges,
+        scrapingConfig: {
+          maxProductsPerRange: 20,
+          maxPages: 2,
+          scrapingStatus: 'pending'
+        }
+      },
+      { new: true, runValidators: true }
+    ).select('name title priceRanges scrapingConfig');
+    
+    res.json({
+      success: true,
+      message: 'Price ranges reset to default successfully',
+      data: {
+        categoryId: updatedCategory._id,
+        categoryName: updatedCategory.name,
+        categoryTitle: updatedCategory.title,
+        priceRanges: updatedCategory.priceRanges,
+        scrapingConfig: updatedCategory.scrapingConfig
+      }
+    });
+  } catch (error) {
+    console.error('Reset Price Ranges Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while resetting price ranges',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
 // @desc    Seed electronics categories
 // @route   POST /api/categories/seed-electronics
 // @access  Private (Super Admin only)
@@ -387,5 +548,8 @@ module.exports = {
   updateCategory,
   deleteCategory,
   toggleCategoryStatus,
+  getCategoryPriceRanges,
+  updateCategoryPriceRanges,
+  resetCategoryPriceRanges,
   seedCategories
 };

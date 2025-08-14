@@ -31,7 +31,58 @@ const categorySchema = new mongoose.Schema({
   searchKeywords: [{
     type: String,
     trim: true
-  }]
+  }],
+  
+  // Price ranges for this category
+  priceRanges: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    label: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    min: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    max: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    query: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  
+  // Scraping configuration
+  scrapingConfig: {
+    maxProductsPerRange: {
+      type: Number,
+      default: 20
+    },
+    maxPages: {
+      type: Number,
+      default: 2
+    },
+    lastScraped: Date,
+    scrapingStatus: {
+      type: String,
+      enum: ['pending', 'in_progress', 'completed', 'failed'],
+      default: 'pending'
+    }
+  }
 }, {
   timestamps: {
     createdAt: 'created_at',

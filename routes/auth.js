@@ -19,6 +19,7 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt:', { email, password: password ? '***' : 'missing' });
 
     // Validation
     if (!email || !password) {
@@ -30,8 +31,10 @@ router.post('/login', async (req, res) => {
 
     // Find admin by email (with password field included)
     const admin = await Admin.findByEmail(email).select('+password +loginAttempts +lockUntil');
+    console.log('Admin found:', admin ? 'Yes' : 'No');
 
     if (!admin) {
+      console.log('Admin not found for email:', email);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
