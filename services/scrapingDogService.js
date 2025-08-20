@@ -3,8 +3,10 @@ require('dotenv').config();
 
 class ScrapingDogService {
   constructor() {
-    this.apiKey = '689c8109805081418fca0f52';
-    this.baseURL = 'https://api.scrapingdog.com/amazon/search';
+    this.apiKey = process.env.SCRAPINGDOG_API_KEY || '689c8109805081418fca0f52';
+    this.baseURL = 'https://api.scrapingdog.com/amazon';
+    this.searchURL = this.baseURL + '/search';
+    this.productURL = this.baseURL + '/product';
     
     // Price ranges for different budget categories
     this.priceRanges = [
@@ -464,6 +466,451 @@ class ScrapingDogService {
    */
   getPriceRanges() {
     return this.priceRanges;
+  }
+
+  /**
+   * Search products with enhanced parameters
+   * @param {string} query - Search query
+   * @param {string} pincode - Indian pincode for location-based results
+   * @param {number} limit - Maximum number of results
+   * @returns {Promise<Array>} - Array of products
+   */
+  async searchProducts(query, pincode = '110001', limit = 20) {
+    try {
+      const params = {
+        api_key: this.apiKey,
+        type: 'search',
+        amazon_domain: 'amazon.in',
+        search_query: query,
+        location: pincode
+      };
+
+      const queryParams = new URLSearchParams(params);
+      const url = `${this.searchURL}?${queryParams}`;
+      
+      console.log(`🔍 ScrapingDog Search: ${query} (${pincode})`);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'TrustfolioBot/1.0'
+        },
+        timeout: 60000
+      });
+
+      if (response.data && response.data.search_results) {
+        const products = response.data.search_results.slice(0, limit);
+        console.log(`✅ Found ${products.length} products for "${query}"`);
+        return products;
+      } else {
+        console.warn('⚠️  No search results found');
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Search products error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed product information by ASIN
+   * @param {string} asin - Amazon Standard Identification Number
+   * @returns {Promise<Object>} - Detailed product information
+   */
+  async getProductDetails(asin) {
+    try {
+      const params = {
+        api_key: this.apiKey,
+        type: 'product',
+        amazon_domain: 'amazon.in',
+        asin: asin
+      };
+
+      const queryParams = new URLSearchParams(params);
+      const url = `${this.productURL}?${queryParams}`;
+      
+      console.log(`📦 ScrapingDog Product Details: ${asin}`);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'TrustfolioBot/1.0'
+        },
+        timeout: 60000
+      });
+
+      if (response.data && response.data.asin) {
+        console.log(`✅ Retrieved details for ASIN: ${asin}`);
+        return response.data;
+      } else {
+        throw new Error(`No product data found for ASIN: ${asin}`);
+      }
+    } catch (error) {
+      console.error(`❌ Product details error for ${asin}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get multiple product details by ASINs
+   * @param {Array<string>} asins - Array of ASINs
+   * @returns {Promise<Object>} - Object with products and errors
+   */
+  async getBulkProductDetails(asins) {
+    const results = {
+      products: {},
+      errors: {},
+      totalRequested: asins.length,
+      totalSuccessful: 0,
+      totalFailed: 0
+    };
+
+    console.log(`🔍 Fetching bulk product details for ${asins.length} ASINs`);
+
+    for (const asin of asins) {
+      try {
+        const productDetails = await this.getProductDetails(asin);
+        results.products[asin] = productDetails;
+        results.totalSuccessful++;
+        
+        // Rate limiting
+        await this.delay(500);
+        
+      } catch (error) {
+        results.errors[asin] = error.message;
+        results.totalFailed++;
+      }
+    }
+
+    console.log(`✅ Bulk fetch completed: ${results.totalSuccessful} successful, ${results.totalFailed} failed`);
+    return results;
+  }
+
+  /**
+   * Preview category products without saving
+   * @param {string} category - Category name
+   * @param {Object} options - Preview options
+   * @returns {Promise<Object>} - Preview results
+   */
+  async previewCategoryProducts(category, options = {}) {
+    const {
+      query,
+      pincode = '110001',
+      limit = 20
+    } = options;
+
+    try {
+      // Use custom query or generate default ones
+      const queries = query ? [query] : this.generateCategoryQueries(category).slice(0, 3);
+      
+      const allProducts = [];
+      const usedAsins = new Set();
+      
+      console.log(`👀 Previewing products for category: ${category}`);
+
+      for (const searchQuery of queries) {
+        try {
+          const products = await this.searchProducts(searchQuery, pincode);
+          
+          for (const product of products) {
+            const asin = this.extractASIN(product);
+            if (asin && !usedAsins.has(asin)) {
+              allProducts.push(product);
+              usedAsins.add(asin);
+              
+              if (allProducts.length >= limit) {
+                break;
+              }
+            }
+          }
+          
+          if (allProducts.length >= limit) {
+            break;
+          }
+          
+          // Rate limiting between queries
+          await this.delay(200);
+          
+        } catch (error) {
+          console.warn(`⚠️  Query "${searchQuery}" failed: ${error.message}`);
+          continue;
+        }
+      }
+
+      return {
+        category,
+        pincode,
+        queriesUsed: queries,
+        totalProducts: allProducts.length,
+        products: allProducts
+      };
+
+    } catch (error) {
+      console.error(`❌ Preview error for ${category}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate category-specific search queries
+   * @param {string} category - Category name
+   * @returns {Array<string>} - Array of search queries
+   */
+  generateCategoryQueries(category) {
+    const queries = [];
+    
+    // Base queries with price ranges
+    const priceRanges = [
+      'under 10000',
+      'under 20000',
+      'under 30000',
+      'under 50000',
+      'under 100000'
+    ];
+    
+    for (const priceRange of priceRanges) {
+      queries.push(`best ${category} ${priceRange}`);
+    }
+    
+    // Brand-specific queries
+    const brandMappings = {
+      earbuds: ['sony', 'jbl', 'boat', 'oneplus', 'realme'],
+      tv: ['samsung', 'lg', 'sony', 'mi', 'oneplus'],
+      laptop: ['hp', 'dell', 'lenovo', 'asus', 'acer'],
+      smartphone: ['samsung', 'oneplus', 'realme', 'xiaomi', 'iphone'],
+      ac: ['lg', 'samsung', 'voltas', 'daikin', 'godrej'],
+      'washing machine': ['lg', 'samsung', 'whirlpool', 'bosch', 'ifb'],
+      refrigerator: ['lg', 'samsung', 'whirlpool', 'godrej', 'haier'],
+      camera: ['canon', 'nikon', 'sony', 'fujifilm', 'panasonic']
+    };
+    
+    const brands = brandMappings[category.toLowerCase()] || [];
+    for (const brand of brands) {
+      queries.push(`${brand} ${category}`);
+      queries.push(`best ${brand} ${category}`);
+    }
+    
+    // Feature-specific queries
+    const featureMappings = {
+      earbuds: ['wireless earbuds', 'noise cancelling earbuds', 'gaming earbuds'],
+      tv: ['smart tv', '4k tv', 'led tv', 'android tv'],
+      laptop: ['gaming laptop', 'business laptop', 'thin laptop'],
+      smartphone: ['5g smartphone', 'camera phone', 'gaming phone'],
+      ac: ['split ac', 'window ac', 'inverter ac'],
+      'washing machine': ['front load washing machine', 'top load washing machine'],
+      refrigerator: ['double door refrigerator', 'single door refrigerator'],
+      camera: ['dslr camera', 'mirrorless camera', 'point and shoot camera']
+    };
+    
+    const features = featureMappings[category.toLowerCase()] || [];
+    queries.push(...features);
+    
+    return [...new Set(queries)];
+  }
+
+  /**
+   * Sync category products with enhanced parsing
+   * @param {Object} category - Category object
+   * @param {number} maxProducts - Maximum products to sync
+   * @returns {Promise<Object>} - Sync results
+   */
+  async syncCategoryProducts(category, maxProducts = 50) {
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    try {
+      console.log(`🔄 Starting sync for category: ${category.name}`);
+      
+      // Get search queries for this category
+      const searchQueries = category.searchQueries && category.searchQueries.length > 0
+        ? category.searchQueries
+        : this.generateCategoryQueries(category.name).slice(0, 5);
+      
+      const pincodes = ['110001', '400001', '560001', '700001']; // Major cities
+      
+      for (const query of searchQueries) {
+        for (const pincode of pincodes) {
+          try {
+            const products = await this.searchProducts(query, pincode);
+            
+            for (const productData of products) {
+              if (results.success >= maxProducts) {
+                break;
+              }
+              
+              try {
+                const parsedProduct = this.parseProductDataEnhanced(productData, category, { query, pincode });
+                if (parsedProduct) {
+                  // Here you would save to database
+                  results.success++;
+                }
+                
+                // Rate limiting
+                await this.delay(200);
+                
+              } catch (error) {
+                results.failed++;
+                results.errors.push(`Product parse error: ${error.message}`);
+              }
+            }
+            
+            if (results.success >= maxProducts) {
+              break;
+            }
+            
+            // Rate limiting between searches
+            await this.delay(1000);
+            
+          } catch (error) {
+            results.errors.push(`Search error for "${query}" in ${pincode}: ${error.message}`);
+          }
+        }
+        
+        if (results.success >= maxProducts) {
+          break;
+        }
+      }
+      
+    } catch (error) {
+      results.errors.push(`Category sync error: ${error.message}`);
+    }
+
+    console.log(`✅ Sync completed for ${category.name}: ${results.success} success, ${results.failed} failed`);
+    return results;
+  }
+
+  /**
+   * Enhanced product data parsing with new model structure
+   * @param {Object} rawProduct - Raw product from API
+   * @param {Object} category - Category object
+   * @param {Object} searchInfo - Search metadata
+   * @returns {Object|null} - Parsed product data
+   */
+  parseProductDataEnhanced(rawProduct, category, searchInfo = {}) {
+    try {
+      const asin = this.extractASIN(rawProduct);
+      if (!asin) return null;
+      
+      const price = this.extractNumericPrice(rawProduct.price_string || rawProduct.price);
+      if (!price || price <= 0) return null;
+      
+      if (!rawProduct.title || rawProduct.title.length < 10) return null;
+      
+      const rating = parseFloat(rawProduct.stars || rawProduct.rating) || 0;
+      const totalReviews = this.extractReviewCount(rawProduct.total_reviews || rawProduct.reviews_count);
+      const images = this.extractImages(rawProduct);
+      
+      return {
+        asin,
+        title: rawProduct.title.trim(),
+        description: rawProduct.description || null,
+        brand: this.extractBrand(rawProduct.title),
+        brandUrl: rawProduct.brand_url || null,
+        category: category._id,
+        categoryName: category.name,
+        productCategory: rawProduct.product_category || null,
+        
+        // Images
+        mainImage: images.length > 0 ? images[0].url : null,
+        images,
+        numberOfVideos: rawProduct.number_of_videos || 0,
+        
+        // Pricing
+        pricing: {
+          current: price,
+          list: this.extractNumericPrice(rawProduct.list_price) || null,
+          previous: this.extractNumericPrice(rawProduct.previous_price) || null,
+          symbol: '₹',
+          currency: 'INR',
+          priceRange: this.determinePriceRange(price)
+        },
+        
+        // Amazon badges
+        badges: {
+          isPrimeExclusive: rawProduct.is_prime_exclusive || false,
+          isBestSeller: rawProduct.is_best_seller || false,
+          isAmazonChoice: rawProduct.is_amazon_choice || false,
+          limitedTimeDeal: rawProduct.limited_time_deal || false,
+          dealOfTheDay: rawProduct.deal_of_the_day || false,
+          isCouponExists: rawProduct.is_coupon_exists || false,
+          couponText: rawProduct.coupon_text || null
+        },
+        
+        // Availability
+        availability: {
+          status: 'unknown',
+          numberOfPeopleBought: rawProduct.number_of_people_bought || null,
+          shippingInfo: rawProduct.shipping_info || null
+        },
+        
+        // Rating
+        rating: {
+          average: rating,
+          totalReviews,
+          stars: rawProduct.stars || null
+        },
+        
+        // Product details
+        featureBullets: rawProduct.feature_bullets || [],
+        productInformation: rawProduct.product_information || null,
+        specifications: rawProduct.specifications || null,
+        
+        // URLs
+        amazonUrl: rawProduct.url || rawProduct.amazon_url || `https://www.amazon.in/dp/${asin}`,
+        optimizedUrl: rawProduct.optimized_url || null,
+        
+        // Customer feedback
+        customerReviews: rawProduct.customer_reviews || [],
+        ratingsDistribution: rawProduct.ratings_distribution || null,
+        customersSay: rawProduct.customers_say || null,
+        
+        // Scraping info
+        scrapingInfo: {
+          scrapedAt: new Date(),
+          source: 'scrapingdog',
+          searchQuery: searchInfo.query || '',
+          priceRangeQueried: searchInfo.priceRange || {},
+          position: rawProduct.position || 0,
+          syncStatus: 'success',
+          lastSyncAt: new Date()
+        },
+        
+        isActive: true,
+        quality: this.assessProductQuality(rawProduct, rating, totalReviews)
+      };
+      
+    } catch (error) {
+      console.error('❌ Enhanced parsing error:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Sync outdated products
+   * @param {number} limit - Maximum products to sync
+   * @returns {Promise<Object>} - Sync results
+   */
+  async syncOutdatedProducts(limit = 100) {
+    const results = {
+      updated: 0,
+      failed: 0,
+      errors: []
+    };
+
+    console.log(`🔄 Starting outdated products sync (limit: ${limit})`);
+    
+    try {
+      // This would typically fetch from database
+      // For now, we'll simulate the process
+      results.updated = 0;
+      results.failed = 0;
+      
+    } catch (error) {
+      results.errors.push(`Outdated sync error: ${error.message}`);
+    }
+
+    return results;
   }
 
   /**

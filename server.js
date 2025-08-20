@@ -53,6 +53,10 @@ const connectDB = async () => {
 // Connect to database
 connectDB();
 
+// Initialize Amazon sync jobs
+const amazonSyncJobs = require('./jobs/amazonSyncJobs');
+amazonSyncJobs.init();
+
 // Routes
 app.get('/', (req, res) => {
   res.json({
@@ -75,6 +79,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/products', require('./routes/products'));
+app.use('/api/amazon', require('./routes/amazonSync'));
 // app.use('/api/users', require('./routes/users'));
 // app.use('/api/portfolios', require('./routes/portfolios'));
 
