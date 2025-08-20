@@ -479,10 +479,10 @@ class ScrapingDogService {
     try {
       const params = {
         api_key: this.apiKey,
-        type: 'search',
-        amazon_domain: 'amazon.in',
-        search_query: query,
-        location: pincode
+        query: query,
+        domain: 'in',
+        location: pincode,
+        page: '1'
       };
 
       const queryParams = new URLSearchParams(params);
@@ -520,9 +520,8 @@ class ScrapingDogService {
     try {
       const params = {
         api_key: this.apiKey,
-        type: 'product',
-        amazon_domain: 'amazon.in',
-        asin: asin
+        asin: asin,
+        domain: 'in'
       };
 
       const queryParams = new URLSearchParams(params);
